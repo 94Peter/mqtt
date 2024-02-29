@@ -20,7 +20,7 @@ const (
 	envAuthUser     = "MQTT_User"
 	envAuthPassword = "MQTT_Password"
 
-	envTopic  = "MQTT_Topic" // topic to publish on
+	envTopics = "MQTT_Topic" // topic to publish on
 	envClient = "MQTT_ClientID"
 	envGroup  = "MQTT_Group" // topic to publish on
 	envQos    = "MQTT_Qos"   // qos to utilise when publishing
@@ -42,9 +42,9 @@ type authConf struct {
 type Config struct {
 	ServerURL *url.URL // MQTT server URL
 	Auth      *authConf
-	ClientID  string // Client ID to use when connecting to server
-	Topic     string // Topic on which to publish messaged
-	Qos       byte   // QOS to use when publishing
+	ClientID  string   // Client ID to use when connecting to server
+	Topics    []string // Topic on which to publish messaged
+	Qos       byte     // QOS to use when publishing
 
 	KeepAlive         uint16        // seconds between keepalive packets
 	ConnectRetryDelay time.Duration // Period between connection attempts
@@ -61,7 +61,12 @@ func (c *Config) SetAuth(user string, pass []byte) {
 }
 
 func (c *Config) IsRawdata() bool {
-	return strings.Contains(c.Topic, "v1/rawdata")
+	for _, t := range c.Topics {
+		if strings.Contains(t, "v1/rawdata") {
+			return true
+		}
+	}
+	return false
 }
 
 // getConfig - Retrieves the configuration from the environment
@@ -89,16 +94,22 @@ func GetConfigFronEnv() (*Config, error) {
 		cfg.ClientID = fmt.Sprintf("%s-%s", clientID, name)
 	}
 
-	if cfg.Topic, err = stringFromEnv(envTopic); err != nil {
+	topics, err := stringFromEnv(envTopics)
+	if err != nil {
 		return nil, err
 	}
+	cfg.Topics = strings.Split(topics, "&")
 
 	group, err := stringFromEnv(envGroup)
 	if err != nil {
 		return nil, err
 	}
 	if group != "" {
-		cfg.Topic = fmt.Sprintf("$share/%s/%s", group, cfg.Topic)
+		shareTopics := make([]string, len(cfg.Topics))
+		for i, t := range cfg.Topics {
+			shareTopics[i] = fmt.Sprintf("$share/%s/%s", group, t)
+		}
+		cfg.Topics = shareTopics
 	}
 
 	cfg.QueuePath, err = stringFromEnv(envQueuePath)

@@ -19,14 +19,14 @@ type Handler interface {
 }
 
 type handler struct {
-	trans  []trans.Trans
+	trans  map[string]trans.Trans
 	logger *log.Logger
 }
 
 // NewHandler creates a new output handler and opens the output file (if applicable)
-func NewHandler(conf *config.Config, ts ...trans.Trans) Handler {
+func NewHandler(conf *config.Config, tsmap map[string]trans.Trans) Handler {
 	return &handler{
-		trans:  ts,
+		trans:  tsmap,
 		logger: conf.Logger,
 	}
 }
@@ -41,8 +41,8 @@ func (o *handler) Close() {
 // handle is called when a message is received
 func (o *handler) handle(msg *paho.PublishReceived) {
 	var err error
-	for _, t := range o.trans {
-		err = t.Send(msg.Packet.Payload)
+	if trans, ok := o.trans[msg.Packet.Topic]; ok {
+		err = trans.Send(msg.Packet.Payload)
 		if err != nil {
 			o.println("send fail: " + err.Error())
 			o.println(string(msg.Packet.Payload))

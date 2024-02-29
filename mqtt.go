@@ -3,7 +3,6 @@ package mqtt
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"log"
 	"net/url"
 	"time"
@@ -63,7 +62,6 @@ func (serv *mqttServ) Run(ctx context.Context) {
 	var q queue.Queue
 	var session session.SessionManager
 	if cfg.QueuePath != "" {
-		fmt.Println(cfg.QueuePath, "run")
 		q, err = file.New(cfg.QueuePath, "queue", ".msg")
 		if err != nil {
 			panic(err)
@@ -91,10 +89,12 @@ func (serv *mqttServ) Run(ctx context.Context) {
 			serv.println("mqtt connection up")
 			// Subscribing in the OnConnectionUp callback is recommended (ensures the subscription is reestablished if
 			// the connection drops)
+			subOpts := make([]paho.SubscribeOptions, len(cfg.Topics))
+			for i, t := range cfg.Topics {
+				subOpts[i] = paho.SubscribeOptions{Topic: t, QoS: cfg.Qos}
+			}
 			if _, err := cm.Subscribe(context.Background(), &paho.Subscribe{
-				Subscriptions: []paho.SubscribeOptions{
-					{Topic: cfg.Topic, QoS: 1},
-				},
+				Subscriptions: subOpts,
 			}); err != nil {
 				serv.printf("failed to subscribe (%s). This is likely to mean no messages will be received.", err)
 			}
