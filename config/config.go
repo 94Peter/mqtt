@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"strconv"
@@ -13,25 +14,27 @@ import (
 
 // Configuration will be pulled from the environment using the following keys
 const (
-	envServerURL = "BrokerURL" // server URL
+	envServerURL = "MQTT_BrokerURL" // server URL
 
-	envAuth         = "IsAuth"
-	envAuthUser     = "User"
-	envAuthPassword = "Password"
+	envAuth         = "MQTT_IsAuth"
+	envAuthUser     = "MQTT_User"
+	envAuthPassword = "MQTT_Password"
 
-	envTopic  = "Topic" // topic to publish on
-	envClient = "ClientID"
-	envGroup  = "Group" // topic to publish on
-	envQos    = "Qos"   // qos to utilise when publishing
+	envTopic  = "MQTT_Topic" // topic to publish on
+	envClient = "MQTT_ClientID"
+	envGroup  = "MQTT_Group" // topic to publish on
+	envQos    = "MQTT_Qos"   // qos to utilise when publishing
 
-	envKeepAlive         = "KeepAlive"         // seconds between keepalive packets
-	envConnectRetryDelay = "ConnectRetryDelay" // milliseconds to delay between connection attempts
+	envKeepAlive         = "MQTT_KeepAlive"         // seconds between keepalive packets
+	envConnectRetryDelay = "MQTT_ConnectRetryDelay" // milliseconds to delay between connection attempts
 
-	envWriteToStdOut = "WriteToStdout" // if "true" then received packets will be written stdout
-	envWriteToDisk   = "WriteToDisk"   // if "true" then received packets will be written to file
-	envOutputFile    = "OutputFile"    // name of file to use if above is true
+	envWriteToStdOut = "MQTT_WriteToStdout" // if "true" then received packets will be written stdout
+	envWriteToDisk   = "MQTT_WriteToDisk"   // if "true" then received packets will be written to file
+	envOutputFile    = "MQTT_OutputFile"    // name of file to use if above is true
 
-	envDebug = "Debug" // if "true" then the libraries will be instructed to print debug info
+	envQueuePath = "MQTT_QueuePath"
+
+	envDebug = "MQTT_Debug" // if "true" then the libraries will be instructed to print debug info
 )
 
 type authConf struct {
@@ -53,8 +56,15 @@ type Config struct {
 	WriteToStdOut  bool   // If true received messages will be written to stdout
 	WriteToDisk    bool   // if true received messages will be written to below file
 	OutputFileName string // filename to save messages to
+	QueuePath      string
 
 	Debug bool // autopaho and paho debug output requested
+
+	Logger *log.Logger
+}
+
+func (c *Config) SetAuth(user string, pass []byte) {
+	c.Auth = &authConf{UserName: user, Password: pass}
 }
 
 func (c *Config) IsRawdata() bool {
@@ -96,6 +106,11 @@ func GetConfigFronEnv() (*Config, error) {
 	}
 	if group != "" {
 		cfg.Topic = fmt.Sprintf("$share/%s/%s", group, cfg.Topic)
+	}
+
+	cfg.QueuePath, err = stringFromEnv(envQueuePath)
+	if err != nil {
+		return nil, err
 	}
 
 	iQos, err := intFromEnv(envQos)
