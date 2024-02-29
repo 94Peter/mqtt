@@ -70,7 +70,7 @@ func (c *Config) IsRawdata() bool {
 }
 
 // getConfig - Retrieves the configuration from the environment
-func GetConfigFronEnv() (*Config, error) {
+func GetConfigFromEnv() (*Config, error) {
 	var cfg Config
 	var err error
 
@@ -99,6 +99,90 @@ func GetConfigFronEnv() (*Config, error) {
 		return nil, err
 	}
 	cfg.Topics = strings.Split(topics, "&")
+
+	group, err := stringFromEnv(envGroup)
+	if err != nil {
+		return nil, err
+	}
+	if group != "" {
+		shareTopics := make([]string, len(cfg.Topics))
+		for i, t := range cfg.Topics {
+			shareTopics[i] = fmt.Sprintf("$share/%s/%s", group, t)
+		}
+		cfg.Topics = shareTopics
+	}
+
+	cfg.QueuePath, err = stringFromEnv(envQueuePath)
+	if err != nil {
+		return nil, err
+	}
+
+	iQos, err := intFromEnv(envQos)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Qos = byte(iQos)
+
+	iKa, err := intFromEnv(envKeepAlive)
+	if err != nil {
+		return nil, err
+	}
+	cfg.KeepAlive = uint16(iKa)
+
+	if cfg.ConnectRetryDelay, err = milliSecondsFromEnv(envConnectRetryDelay); err != nil {
+		return nil, err
+	}
+
+	if cfg.Debug, err = booleanFromEnv(envDebug); err != nil {
+		return nil, err
+	}
+
+	if cfg.Debug {
+		cfg.Logger = log.New(os.Stdout, "", 0)
+	}
+
+	isAuth, err := booleanFromEnv(envAuth)
+	if err != nil {
+		return nil, err
+	}
+	if isAuth {
+		cfg.Auth = &authConf{}
+		if cfg.Auth.UserName, err = stringFromEnv(envAuthUser); err != nil {
+			return nil, err
+		}
+		password, err := stringFromEnv(envAuthPassword)
+		if err != nil {
+			return nil, err
+		}
+		cfg.Auth.Password = []byte(password)
+	}
+
+	return &cfg, nil
+}
+
+func GetConfigFromEnvWithoutTopic() (*Config, error) {
+	var cfg Config
+	var err error
+
+	var srvURL string
+	if srvURL, err = stringFromEnv(envServerURL); err != nil {
+		return nil, err
+	}
+
+	cfg.ServerURL, err = url.Parse(srvURL)
+	if err != nil {
+		return nil, fmt.Errorf("environmental variable %s must be a valid URL (%w)", envServerURL, err)
+	}
+	name, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+
+	if clientID, err := stringFromEnv(envClient); err != nil {
+		return nil, err
+	} else {
+		cfg.ClientID = fmt.Sprintf("%s-%s", clientID, name)
+	}
 
 	group, err := stringFromEnv(envGroup)
 	if err != nil {
