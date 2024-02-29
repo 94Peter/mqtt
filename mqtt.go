@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log"
 	"net/url"
 	"time"
@@ -18,6 +19,7 @@ import (
 )
 
 type MqttServer interface {
+	PublishViaQueue(topic string, qos byte, payload []byte) error
 	Publish(topic string, qos byte, payload []byte) error
 	MqttSubOnlyServer
 }
@@ -26,6 +28,14 @@ type MqttSubOnlyServer interface {
 	Run(ctx context.Context)
 	Close()
 	SetLog(l *log.Logger)
+	Statue() error
+}
+
+func NewMqttPublishOnlyServ(conf *config.Config) MqttServer {
+	conf.Topics = []string{}
+	return &mqttServ{
+		config: conf,
+	}
 }
 
 func NewMqttSubOnlyServ(conf *config.Config, h Handler) MqttSubOnlyServer {
@@ -43,10 +53,18 @@ func NewMqttServ(conf *config.Config, h Handler) MqttServer {
 }
 
 type mqttServ struct {
-	ctx    context.Context
-	config *config.Config
-	cm     *autopaho.ConnectionManager
-	h      Handler
+	ctx         context.Context
+	config      *config.Config
+	cm          *autopaho.ConnectionManager
+	h           Handler
+	isConnected bool
+}
+
+func (serv *mqttServ) Statue() error {
+	if serv.isConnected {
+		return nil
+	}
+	return errors.New("not connected")
 }
 
 func (serv *mqttServ) Close() {
@@ -87,8 +105,12 @@ func (serv *mqttServ) Run(ctx context.Context) {
 		SessionExpiryInterval: 86400,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 			serv.println("mqtt connection up")
+			serv.isConnected = true
 			// Subscribing in the OnConnectionUp callback is recommended (ensures the subscription is reestablished if
 			// the connection drops)
+			if len(cfg.Topics) == 0 {
+				return
+			}
 			subOpts := make([]paho.SubscribeOptions, len(cfg.Topics))
 			for i, t := range cfg.Topics {
 				subOpts[i] = paho.SubscribeOptions{Topic: t, QoS: cfg.Qos}
@@ -118,6 +140,7 @@ func (serv *mqttServ) Run(ctx context.Context) {
 				}},
 			OnClientError: func(err error) { serv.printf("client error: %s\n", err) },
 			OnServerDisconnect: func(d *paho.Disconnect) {
+				serv.isConnected = false
 				if d.Properties != nil {
 					serv.printf("server requested disconnect: %s\n", d.Properties.ReasonString)
 				} else {
@@ -176,11 +199,26 @@ func (serv *mqttServ) Run(ctx context.Context) {
 
 func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
 	// Publish will block so we run it in a goRoutine
-	// pr, err := serv.cm.Publish(serv.ctx, &paho.Publish{
-	// 	QoS:     qos,
-	// 	Topic:   topic,
-	// 	Payload: payload,
-	// })
+	pr, err := serv.cm.Publish(serv.ctx, &paho.Publish{
+		QoS:     qos,
+		Topic:   topic,
+		Payload: payload,
+	})
+
+	if err != nil {
+		serv.printf("error publishing: %s\n", err)
+	} else if pr != nil && pr.ReasonCode != 0 && pr.ReasonCode != 16 { // 16 = Server received message but there are no subscribers{
+		serv.printf("reason code %d received\n", pr.ReasonCode)
+	} else {
+		serv.printf("sent topic [%s] message: %s\n", topic, payload)
+	}
+	return nil
+}
+
+func (serv *mqttServ) PublishViaQueue(topic string, qos byte, payload []byte) error {
+	if serv.config.QueuePath == "" {
+		return errors.New("no queue path set")
+	}
 	err := serv.cm.PublishViaQueue(serv.ctx, &autopaho.QueuePublish{
 		Publish: &paho.Publish{
 			QoS:     qos,
