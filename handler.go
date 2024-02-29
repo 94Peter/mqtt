@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"log"
-	"os"
 	"syscall"
 
 	"github.com/94peter/mqtt/config"
@@ -20,38 +19,20 @@ type Handler interface {
 }
 
 type handler struct {
-	writeToStdOut bool
-	trans         []trans.Trans
-	f             *os.File
-	logger        *log.Logger
+	trans  []trans.Trans
+	logger *log.Logger
 }
 
 // NewHandler creates a new output handler and opens the output file (if applicable)
 func NewHandler(conf *config.Config, ts ...trans.Trans) Handler {
-	var f *os.File
-	if conf.WriteToDisk {
-		var err error
-		f, err = os.Create(conf.OutputFileName)
-		if err != nil {
-			panic(err)
-		}
-	}
 	return &handler{
-		writeToStdOut: conf.WriteToStdOut,
-		trans:         ts,
-		f:             f,
-		logger:        conf.Logger,
+		trans:  ts,
+		logger: conf.Logger,
 	}
 }
 
 // Close closes the file
 func (o *handler) Close() {
-	if o.f != nil {
-		if err := o.f.Close(); err != nil {
-			o.printf("ERROR closing file: %s", err)
-		}
-		o.f = nil
-	}
 	for _, t := range o.trans {
 		t.Close()
 	}

@@ -28,10 +28,6 @@ const (
 	envKeepAlive         = "MQTT_KeepAlive"         // seconds between keepalive packets
 	envConnectRetryDelay = "MQTT_ConnectRetryDelay" // milliseconds to delay between connection attempts
 
-	envWriteToStdOut = "MQTT_WriteToStdout" // if "true" then received packets will be written stdout
-	envWriteToDisk   = "MQTT_WriteToDisk"   // if "true" then received packets will be written to file
-	envOutputFile    = "MQTT_OutputFile"    // name of file to use if above is true
-
 	envQueuePath = "MQTT_QueuePath"
 
 	envDebug = "MQTT_Debug" // if "true" then the libraries will be instructed to print debug info
@@ -53,10 +49,7 @@ type Config struct {
 	KeepAlive         uint16        // seconds between keepalive packets
 	ConnectRetryDelay time.Duration // Period between connection attempts
 
-	WriteToStdOut  bool   // If true received messages will be written to stdout
-	WriteToDisk    bool   // if true received messages will be written to below file
-	OutputFileName string // filename to save messages to
-	QueuePath      string
+	QueuePath string
 
 	Debug bool // autopaho and paho debug output requested
 
@@ -129,18 +122,12 @@ func GetConfigFronEnv() (*Config, error) {
 		return nil, err
 	}
 
-	if cfg.WriteToStdOut, err = booleanFromEnv(envWriteToStdOut); err != nil {
-		return nil, err
-	}
-	if cfg.WriteToDisk, err = booleanFromEnv(envWriteToDisk); err != nil {
-		return nil, err
-	}
-	if cfg.OutputFileName, err = stringFromEnv(envOutputFile); cfg.WriteToDisk && err != nil {
+	if cfg.Debug, err = booleanFromEnv(envDebug); err != nil {
 		return nil, err
 	}
 
-	if cfg.Debug, err = booleanFromEnv(envDebug); err != nil {
-		return nil, err
+	if cfg.Debug {
+		cfg.Logger = log.New(os.Stdout, "", 0)
 	}
 
 	isAuth, err := booleanFromEnv(envAuth)
