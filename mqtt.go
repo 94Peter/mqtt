@@ -208,6 +208,7 @@ func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
 
 	if err != nil {
 		serv.printf("error publishing: %s\n", err)
+		return err
 	} else if pr != nil && pr.ReasonCode != 0 && pr.ReasonCode != 16 { // 16 = Server received message but there are no subscribers{
 		serv.printf("reason code %d received\n", pr.ReasonCode)
 	} else {
@@ -231,6 +232,7 @@ func (serv *mqttServ) PublishViaQueue(topic string, qos byte, payload []byte) er
 	})
 	if err != nil {
 		serv.printf("error publishing: %s\n", err)
+		return err
 	} else {
 		serv.printf("sent topic [%s] message: %s\n", topic, payload)
 	}
