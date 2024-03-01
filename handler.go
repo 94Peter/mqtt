@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"log"
-	"syscall"
 
 	"github.com/94peter/mqtt/config"
 	"github.com/94peter/mqtt/trans"
@@ -46,7 +45,6 @@ func (o *handler) handle(msg *paho.PublishReceived) {
 		if err != nil {
 			o.println("send fail: " + err.Error())
 			o.println(string(msg.Packet.Payload))
-			syscall.SIGTERM.Signal()
 		}
 	}
 }

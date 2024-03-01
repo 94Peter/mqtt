@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/94peter/mqtt/config"
+	"github.com/94peter/mqtt/trans"
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/autopaho/queue"
 	"github.com/eclipse/paho.golang/autopaho/queue/file"
@@ -38,22 +39,21 @@ func NewMqttPublishOnlyServ(conf *config.Config) MqttServer {
 	}
 }
 
-func NewMqttSubOnlyServ(conf *config.Config, h Handler) MqttSubOnlyServer {
+func NewMqttSubOnlyServ(conf *config.Config, tsmap map[string]trans.Trans) MqttSubOnlyServer {
 	return &mqttServ{
 		config: conf,
-		h:      h,
+		h:      NewHandler(conf, tsmap),
 	}
 }
 
-func NewMqttServ(conf *config.Config, h Handler) MqttServer {
+func NewMqttServ(conf *config.Config, tsmap map[string]trans.Trans) MqttServer {
 	return &mqttServ{
 		config: conf,
-		h:      h,
+		h:      NewHandler(conf, tsmap),
 	}
 }
 
 type mqttServ struct {
-	ctx         context.Context
 	config      *config.Config
 	cm          *autopaho.ConnectionManager
 	h           Handler
@@ -75,7 +75,6 @@ func (serv *mqttServ) Close() {
 
 func (serv *mqttServ) Run(ctx context.Context) {
 	var err error
-	serv.ctx = ctx
 	cfg := serv.config
 	var q queue.Queue
 	var session session.SessionManager
@@ -199,7 +198,9 @@ func (serv *mqttServ) Run(ctx context.Context) {
 
 func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
 	// Publish will block so we run it in a goRoutine
-	pr, err := serv.cm.Publish(serv.ctx, &paho.Publish{
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	pr, err := serv.cm.Publish(ctx, &paho.Publish{
 		QoS:     qos,
 		Topic:   topic,
 		Payload: payload,
@@ -219,7 +220,9 @@ func (serv *mqttServ) PublishViaQueue(topic string, qos byte, payload []byte) er
 	if serv.config.QueuePath == "" {
 		return errors.New("no queue path set")
 	}
-	err := serv.cm.PublishViaQueue(serv.ctx, &autopaho.QueuePublish{
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := serv.cm.PublishViaQueue(ctx, &autopaho.QueuePublish{
 		Publish: &paho.Publish{
 			QoS:     qos,
 			Topic:   topic,
