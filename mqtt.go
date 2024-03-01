@@ -201,7 +201,7 @@ func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	pr, err := serv.cm.Publish(ctx, &paho.Publish{
-		QoS:     qos,
+		QoS:     0,
 		Topic:   topic,
 		Payload: payload,
 	})
