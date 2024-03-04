@@ -205,11 +205,7 @@ func GetConfigFromEnvWithoutTopic() (*Config, error) {
 		return nil, err
 	}
 	if group != "" {
-		shareTopics := make([]string, len(cfg.Topics))
-		for i, t := range cfg.Topics {
-			shareTopics[i] = fmt.Sprintf("$share/%s/%s", group, t)
-		}
-		cfg.Topics = shareTopics
+		cfg.Group = group
 	}
 
 	cfg.QueuePath, err = stringFromEnv(envQueuePath)
