@@ -42,6 +42,7 @@ type authConf struct {
 type Config struct {
 	ServerURL *url.URL // MQTT server URL
 	Auth      *authConf
+	Group     string
 	ClientID  string   // Client ID to use when connecting to server
 	Topics    []string // Topic on which to publish messaged
 	Qos       byte     // QOS to use when publishing
@@ -54,6 +55,20 @@ type Config struct {
 	Debug bool // autopaho and paho debug output requested
 
 	Logger *log.Logger
+}
+
+func (c *Config) getGroupTopic(t string) string {
+	return fmt.Sprintf("$share/%s/%s", c.Group, t)
+}
+
+func (c *Config) AddTopics(topics ...string) {
+	if c.Group != "" {
+		for _, t := range topics {
+			c.Topics = append(c.Topics, c.getGroupTopic(t))
+		}
+	} else {
+		c.Topics = append(c.Topics, topics...)
+	}
 }
 
 func (c *Config) SetAuth(user string, pass []byte) {
@@ -105,9 +120,10 @@ func GetConfigFromEnv() (*Config, error) {
 		return nil, err
 	}
 	if group != "" {
+		cfg.Group = group
 		shareTopics := make([]string, len(cfg.Topics))
 		for i, t := range cfg.Topics {
-			shareTopics[i] = fmt.Sprintf("$share/%s/%s", group, t)
+			shareTopics[i] = cfg.getGroupTopic(t)
 		}
 		cfg.Topics = shareTopics
 	}
