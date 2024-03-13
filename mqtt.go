@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/94peter/mqtt/config"
@@ -32,25 +33,44 @@ type MqttSubOnlyServer interface {
 	Statue() error
 }
 
-func NewMqttPublishOnlyServ(conf *config.Config) MqttServer {
+func createDirIfNotExists(path string, perm os.FileMode) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return os.MkdirAll(path, perm)
+	}
+	return nil
+}
+
+func NewMqttPublishOnlyServ(conf *config.Config) (MqttServer, error) {
+	err := createDirIfNotExists(conf.QueuePath, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
 	conf.Topics = []string{}
 	return &mqttServ{
 		config: conf,
-	}
+	}, nil
 }
 
-func NewMqttSubOnlyServ(conf *config.Config, tsmap map[string]trans.Trans) MqttSubOnlyServer {
+func NewMqttSubOnlyServ(conf *config.Config, tsmap map[string]trans.Trans) (MqttSubOnlyServer, error) {
+	err := createDirIfNotExists(conf.QueuePath, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
 	return &mqttServ{
 		config: conf,
 		h:      NewHandler(conf, tsmap),
-	}
+	}, nil
 }
 
-func NewMqttServ(conf *config.Config, tsmap map[string]trans.Trans) MqttServer {
+func NewMqttServ(conf *config.Config, tsmap map[string]trans.Trans) (MqttServer, error) {
+	err := createDirIfNotExists(conf.QueuePath, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
 	return &mqttServ{
 		config: conf,
 		h:      NewHandler(conf, tsmap),
-	}
+	}, nil
 }
 
 type mqttServ struct {
