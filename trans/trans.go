@@ -1,20 +1,20 @@
 package trans
 
 type Trans interface {
-	Send([]byte) error
+	Send(string, []byte) error
 	Close()
 }
 
-func NewSimpleTrans(myFunc func([]byte) error) Trans {
+func NewSimpleTrans(myFunc func(string, []byte) error) Trans {
 	return &simpleTrans{sendFunc: myFunc}
 }
 
 type simpleTrans struct {
-	sendFunc func([]byte) error
+	sendFunc func(string, []byte) error
 }
 
-func (t *simpleTrans) Send(data []byte) error {
-	return t.sendFunc(data)
+func (t *simpleTrans) Send(topic string, data []byte) error {
+	return t.sendFunc(topic, data)
 }
 
 func (t *simpleTrans) Close() {
