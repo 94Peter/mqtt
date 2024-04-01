@@ -41,19 +41,12 @@ func (o *handler) Close() {
 func (o *handler) handle(msg *paho.PublishReceived) {
 	var err error
 	if trans, ok := o.trans[msg.Packet.Topic]; ok {
-		err = trans.Send(msg.Packet.Payload)
+		err = trans.Send(msg.Packet.Topic, msg.Packet.Payload)
 		if err != nil {
 			o.println("send fail: " + err.Error())
 			o.println(string(msg.Packet.Payload))
 		}
 	}
-}
-
-func (o *handler) printf(format string, v ...interface{}) {
-	if o.logger == nil {
-		return
-	}
-	o.logger.Printf(format, v...)
 }
 
 func (o *handler) println(a ...any) {
