@@ -115,10 +115,8 @@ func GetConfigFromEnv() (*Config, error) {
 	}
 	cfg.Topics = strings.Split(topics, "&")
 
-	group, err := stringFromEnv(envGroup)
-	if err != nil {
-		return nil, err
-	}
+	group, _ := stringFromEnv(envGroup)
+
 	if group != "" {
 		cfg.Group = group
 		shareTopics := make([]string, len(cfg.Topics))
@@ -128,10 +126,7 @@ func GetConfigFromEnv() (*Config, error) {
 		cfg.Topics = shareTopics
 	}
 
-	cfg.QueuePath, err = stringFromEnv(envQueuePath)
-	if err != nil {
-		return nil, err
-	}
+	cfg.QueuePath, _ = stringFromEnv(envQueuePath)
 
 	iQos, err := intFromEnv(envQos)
 	if err != nil {
@@ -200,18 +195,12 @@ func GetConfigFromEnvWithoutTopic() (*Config, error) {
 		cfg.ClientID = fmt.Sprintf("%s-%s", clientID, name)
 	}
 
-	group, err := stringFromEnv(envGroup)
-	if err != nil {
-		return nil, err
-	}
+	group, _ := stringFromEnv(envGroup)
 	if group != "" {
 		cfg.Group = group
 	}
 
-	cfg.QueuePath, err = stringFromEnv(envQueuePath)
-	if err != nil {
-		return nil, err
-	}
+	cfg.QueuePath, _ = stringFromEnv(envQueuePath)
 
 	iQos, err := intFromEnv(envQos)
 	if err != nil {

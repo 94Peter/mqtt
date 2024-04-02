@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"log"
+	"strings"
 
 	"github.com/94peter/mqtt/config"
 	"github.com/94peter/mqtt/trans"
@@ -37,14 +38,24 @@ func (o *handler) Close() {
 	}
 }
 
+func (o *handler) sendMsg(t trans.Trans, topic string, data []byte) {
+	err := t.Send(topic, data)
+	if err != nil {
+		o.println("send fail: " + err.Error())
+		o.println(string(data))
+	}
+}
+
 // handle is called when a message is received
 func (o *handler) handle(msg *paho.PublishReceived) {
-	var err error
-	if trans, ok := o.trans[msg.Packet.Topic]; ok {
-		err = trans.Send(msg.Packet.Topic, msg.Packet.Payload)
-		if err != nil {
-			o.println("send fail: " + err.Error())
-			o.println(string(msg.Packet.Payload))
+	for k, t := range o.trans {
+		if k == msg.Packet.Topic {
+			o.sendMsg(t, msg.Packet.Topic, msg.Packet.Payload)
+		} else if strings.Contains(k, "#") {
+			prefix := strings.Split(k, "#")[0]
+			if strings.HasPrefix(msg.Packet.Topic, prefix) {
+				o.sendMsg(t, msg.Packet.Topic, msg.Packet.Payload)
+			}
 		}
 	}
 }
