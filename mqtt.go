@@ -34,6 +34,9 @@ type MqttSubOnlyServer interface {
 }
 
 func createDirIfNotExists(path string, perm os.FileMode) error {
+	if path == "" {
+		return nil
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return os.MkdirAll(path, perm)
 	}
