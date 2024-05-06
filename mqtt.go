@@ -1,9 +1,12 @@
 package mqtt
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -221,6 +224,13 @@ func (serv *mqttServ) Run(ctx context.Context) {
 
 func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
 	// Publish will block so we run it in a goRoutine
+	var err error
+	if serv.config.EnableGzip {
+		payload, err = gZipData(payload)
+	}
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	pr, err := serv.cm.Publish(ctx, &paho.Publish{
@@ -244,9 +254,16 @@ func (serv *mqttServ) PublishViaQueue(topic string, qos byte, payload []byte) er
 	if serv.config.QueuePath == "" {
 		return errors.New("no queue path set")
 	}
+	var err error
+	if serv.config.EnableGzip {
+		payload, err = gZipData(payload)
+	}
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	err := serv.cm.PublishViaQueue(ctx, &autopaho.QueuePublish{
+	err = serv.cm.PublishViaQueue(ctx, &autopaho.QueuePublish{
 		Publish: &paho.Publish{
 			QoS:     qos,
 			Topic:   topic,
@@ -284,4 +301,46 @@ func (serv *mqttServ) println(v ...interface{}) {
 		return
 	}
 	serv.config.Logger.Println(v...)
+}
+
+func gUnzipData(data []byte) (resData []byte, err error) {
+	b := bytes.NewBuffer(data)
+
+	var r io.Reader
+	r, err = gzip.NewReader(b)
+	if err != nil {
+		return
+	}
+
+	var resB bytes.Buffer
+	_, err = resB.ReadFrom(r)
+	if err != nil {
+		return
+	}
+
+	resData = resB.Bytes()
+
+	return
+}
+
+func gZipData(data []byte) (compressedData []byte, err error) {
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+
+	_, err = gz.Write(data)
+	if err != nil {
+		return
+	}
+
+	if err = gz.Flush(); err != nil {
+		return
+	}
+
+	if err = gz.Close(); err != nil {
+		return
+	}
+
+	compressedData = b.Bytes()
+
+	return
 }

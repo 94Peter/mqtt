@@ -27,8 +27,8 @@ const (
 
 	envKeepAlive         = "MQTT_KeepAlive"         // seconds between keepalive packets
 	envConnectRetryDelay = "MQTT_ConnectRetryDelay" // milliseconds to delay between connection attempts
-
-	envQueuePath = "MQTT_QueuePath"
+	envEnableGzip        = "MQTT_Gzip"
+	envQueuePath         = "MQTT_QueuePath"
 
 	envDebug = "MQTT_Debug" // if "true" then the libraries will be instructed to print debug info
 )
@@ -50,7 +50,8 @@ type Config struct {
 	KeepAlive         uint16        // seconds between keepalive packets
 	ConnectRetryDelay time.Duration // Period between connection attempts
 
-	QueuePath string
+	QueuePath  string
+	EnableGzip bool
 
 	Debug bool // autopaho and paho debug output requested
 
@@ -166,6 +167,10 @@ func GetConfigFromEnv() (*Config, error) {
 			return nil, err
 		}
 		cfg.Auth.Password = []byte(password)
+	}
+	cfg.EnableGzip, err = booleanFromEnv(envEnableGzip)
+	if err != nil {
+		return nil, err
 	}
 
 	return &cfg, nil

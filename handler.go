@@ -1,6 +1,7 @@
 package mqtt
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -19,15 +20,17 @@ type Handler interface {
 }
 
 type handler struct {
-	trans  map[string]trans.Trans
-	logger *log.Logger
+	enableGzip bool
+	trans      map[string]trans.Trans
+	logger     *log.Logger
 }
 
 // NewHandler creates a new output handler and opens the output file (if applicable)
 func NewHandler(conf *config.Config, tsmap map[string]trans.Trans) Handler {
 	return &handler{
-		trans:  tsmap,
-		logger: conf.Logger,
+		enableGzip: conf.EnableGzip,
+		trans:      tsmap,
+		logger:     conf.Logger,
 	}
 }
 
@@ -39,7 +42,16 @@ func (o *handler) Close() {
 }
 
 func (o *handler) sendMsg(t trans.Trans, topic string, data []byte) {
-	err := t.Send(topic, data)
+	var err error
+	if o.enableGzip {
+		data, err = gUnzipData(data)
+		if err != nil {
+			o.println(err.Error())
+			return
+		}
+	}
+	o.println(fmt.Sprintf("data size: %d", len(data)))
+	err = t.Send(topic, data)
 	if err != nil {
 		o.println("send fail: " + err.Error())
 		o.println(string(data))
