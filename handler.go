@@ -45,14 +45,17 @@ func (o *handler) sendMsg(t trans.Trans, topic string, data []byte) {
 	var err error
 
 	if o.enableGzip {
-		o.println(fmt.Sprintf("before unzip data size: %d", len(data)))
+		o.println(fmt.Sprintf("before unzip data size: %s",
+			formatFileSize(float64(len(data)), 1024)))
+
 		data, err = gUnzipData(data)
 		if err != nil {
 			o.println(err.Error())
 			return
 		}
 	}
-	o.println(fmt.Sprintf("data size: %d", len(data)))
+	o.println(fmt.Sprintf("data size: %s",
+		formatFileSize(float64(len(data)), 1024)))
 	err = t.Send(topic, data)
 	if err != nil {
 		o.println("send fail: " + err.Error())
@@ -79,4 +82,22 @@ func (o *handler) println(a ...any) {
 		return
 	}
 	o.logger.Println(a...)
+}
+
+var sizes = []string{"B", "kB", "MB", "GB", "TB", "PB", "EB"}
+
+func formatFileSize(s float64, base float64) string {
+	unitsLimit := len(sizes)
+	i := 0
+	for s >= base && i < unitsLimit {
+		s = s / base
+		i++
+	}
+
+	f := "%.0f %s"
+	if i > 1 {
+		f = "%.2f %s"
+	}
+
+	return fmt.Sprintf(f, s, sizes[i])
 }
