@@ -43,7 +43,9 @@ func (o *handler) Close() {
 
 func (o *handler) sendMsg(t trans.Trans, topic string, data []byte) {
 	var err error
+
 	if o.enableGzip {
+		o.println(fmt.Sprintf("before unzip data size: %d", len(data)))
 		data, err = gUnzipData(data)
 		if err != nil {
 			o.println(err.Error())
