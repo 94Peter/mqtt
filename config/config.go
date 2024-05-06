@@ -246,6 +246,10 @@ func GetConfigFromEnvWithoutTopic() (*Config, error) {
 		}
 		cfg.Auth.Password = []byte(password)
 	}
+	cfg.EnableGzip, err = booleanFromEnv(envEnableGzip)
+	if err != nil {
+		return nil, err
+	}
 
 	return &cfg, nil
 }
