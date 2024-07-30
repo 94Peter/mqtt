@@ -304,3 +304,87 @@ func booleanFromEnv(key string) (bool, error) {
 		return false, fmt.Errorf("environmental variable %s be a valid boolean option (is %s)", key, s)
 	}
 }
+
+func envHasPrefix(prefix string, env string) string {
+	if prefix == "" {
+		return env
+	}
+	return prefix + "_" + env
+}
+
+func GetConfigFromEnvPrefixWithoutTopic(prefix string) (*Config, error) {
+	if prefix == "" {
+		return GetConfigFromEnvWithoutTopic()
+	}
+	var cfg Config
+	var err error
+
+	var srvURL string
+	if srvURL, err = stringFromEnv(envHasPrefix(prefix, envServerURL)); err != nil {
+		return nil, err
+	}
+
+	cfg.ServerURL, err = url.Parse(srvURL)
+	if err != nil {
+		return nil, fmt.Errorf("environmental variable %s must be a valid URL (%w)", envServerURL, err)
+	}
+	name, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+
+	if clientID, err := stringFromEnv(envHasPrefix(prefix, envClient)); err != nil {
+		return nil, err
+	} else {
+		cfg.ClientID = fmt.Sprintf("%s-%s", clientID, name)
+	}
+
+	group, _ := stringFromEnv(envHasPrefix(prefix, envGroup))
+	if group != "" {
+		cfg.Group = group
+	}
+
+	cfg.QueuePath, _ = stringFromEnv(envHasPrefix(prefix, envQueuePath))
+
+	iQos, err := intFromEnv(envHasPrefix(prefix, envQos))
+	if err != nil {
+		return nil, err
+	}
+	cfg.Qos = byte(iQos)
+
+	iKa, err := intFromEnv(envHasPrefix(prefix, envKeepAlive))
+	if err != nil {
+		return nil, err
+	}
+	cfg.KeepAlive = uint16(iKa)
+
+	if cfg.ConnectRetryDelay, err = milliSecondsFromEnv(envConnectRetryDelay); err != nil {
+		return nil, err
+	}
+
+	if cfg.Debug, err = booleanFromEnv(envHasPrefix(prefix, envDebug)); err != nil {
+		return nil, err
+	}
+
+	if cfg.Debug {
+		cfg.Logger = log.New(os.Stdout, "", 0)
+	}
+
+	isAuth, err := booleanFromEnv(envHasPrefix(prefix, envAuth))
+	if err != nil {
+		return nil, err
+	}
+	if isAuth {
+		cfg.Auth = &authConf{}
+		if cfg.Auth.UserName, err = stringFromEnv(envHasPrefix(prefix, envAuthUser)); err != nil {
+			return nil, err
+		}
+		password, err := stringFromEnv(envHasPrefix(prefix, envAuthPassword))
+		if err != nil {
+			return nil, err
+		}
+		cfg.Auth.Password = []byte(password)
+	}
+
+	return &cfg, nil
+}
