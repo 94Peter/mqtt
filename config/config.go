@@ -358,7 +358,7 @@ func GetConfigFromEnvPrefixWithoutTopic(prefix string) (*Config, error) {
 	}
 	cfg.KeepAlive = uint16(iKa)
 
-	if cfg.ConnectRetryDelay, err = milliSecondsFromEnv(envConnectRetryDelay); err != nil {
+	if cfg.ConnectRetryDelay, err = milliSecondsFromEnv(envHasPrefix(prefix, envConnectRetryDelay)); err != nil {
 		return nil, err
 	}
 
