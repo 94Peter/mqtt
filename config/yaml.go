@@ -10,10 +10,10 @@ import (
 )
 
 type yamlConfig struct {
-	ServerURL         *url.URL      `yaml:"server_url"`
+	ServerURL         string        `yaml:"server_url"`
 	Auth              *authConf     `yaml:"auth"`
 	Qos               byte          `yaml:"qos"`
-	KeepAlive         uint16        `yaml:"keepalive"`
+	KeepAlive         uint16        `yaml:"keep_alive"`
 	ConnectRetryDelay time.Duration `yaml:"connect_retry_delay"`
 	QueuePath         string        `yaml:"queue_path"`
 	Debug             bool          `yaml:"debug"`
@@ -26,7 +26,6 @@ func GetConfigFromYaml(file string, service string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	err = yaml.Unmarshal(data, &yamlCfg)
 	if err != nil {
 		return nil, err
@@ -36,8 +35,11 @@ func GetConfigFromYaml(file string, service string) (*Config, error) {
 		return nil, err
 	}
 	var cfg Config
-
-	cfg.ServerURL = yamlCfg.ServerURL
+	myurl, err := url.Parse(yamlCfg.ServerURL)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ServerURL = myurl
 	cfg.ClientID = fmt.Sprintf("%s-%s", service, hostname)
 	cfg.Qos = yamlCfg.Qos
 	cfg.KeepAlive = yamlCfg.KeepAlive
