@@ -30,6 +30,10 @@ const (
 	envEnableGzip        = "MQTT_Gzip"
 	envQueuePath         = "MQTT_QueuePath"
 
+	envStoreType   = "MQTT_Store_Type"
+	envStorePath   = "MQTT_Store_Path"
+	envStoreEnable = "MQTT_Store_Enable"
+
 	envDebug = "MQTT_Debug" // if "true" then the libraries will be instructed to print debug info
 )
 
@@ -38,10 +42,16 @@ type authConf struct {
 	Password []byte
 }
 
+type storeConf struct {
+	Type string
+	Path string
+}
+
 // config holds the configuration
 type Config struct {
 	ServerURL *url.URL // MQTT server URL
 	Auth      *authConf
+	Store     *storeConf
 	Group     string
 	ClientID  string   // Client ID to use when connecting to server
 	Topics    []string // Topic on which to publish messaged
@@ -74,6 +84,10 @@ func (c *Config) AddTopics(topics ...string) {
 
 func (c *Config) SetAuth(user string, pass []byte) {
 	c.Auth = &authConf{UserName: user, Password: pass}
+}
+
+func (c *Config) SetStore(typ string, path string) {
+	c.Store = &storeConf{Type: typ, Path: path}
 }
 
 func (c *Config) IsRawdata() bool {
@@ -171,6 +185,27 @@ func GetConfigFromEnv() (*Config, error) {
 	cfg.EnableGzip, err = booleanFromEnv(envEnableGzip)
 	if err != nil {
 		return nil, err
+	}
+
+	isStoreEnable, err := booleanFromEnv(envStoreEnable)
+	if err != nil {
+		return nil, err
+	}
+	if isStoreEnable {
+		storeType, err := stringFromEnv(envStoreType)
+		if err != nil {
+			return nil, err
+		}
+		storePath, err := stringFromEnv(envStorePath)
+		if err != nil {
+			return nil, err
+		}
+		if storeType != "" && storeType != "memory" && storeType != "file" {
+			return nil, fmt.Errorf("environmental variable %s must be 'memory' or 'file'", envStoreType)
+		}
+		if storePath != "" && storeType != "" {
+			cfg.Store = &storeConf{Type: storeType, Path: storePath}
+		}
 	}
 
 	return &cfg, nil

@@ -10,22 +10,23 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"time"
 
 	"github.com/94peter/mqtt/config"
 	"github.com/94peter/mqtt/trans"
+
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/autopaho/queue"
 	"github.com/eclipse/paho.golang/autopaho/queue/file"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/eclipse/paho.golang/paho/session"
 	"github.com/eclipse/paho.golang/paho/session/state"
+	storefile "github.com/eclipse/paho.golang/paho/store/file"
 	"github.com/eclipse/paho.golang/paho/store/memory"
 )
 
 type MqttServer interface {
-	PublishViaQueue(topic string, qos byte, payload []byte) error
-	Publish(topic string, qos byte, payload []byte) error
+	PublishViaQueue(ctx context.Context, topic string, qos byte, payload []byte) error
+	Publish(ctx context.Context, topic string, qos byte, payload []byte) error
 	MqttSubOnlyServer
 }
 
@@ -108,26 +109,50 @@ func (serv *mqttServ) Run(ctx context.Context) {
 		q, err = file.New(cfg.QueuePath, "queue", ".msg")
 		if err != nil {
 			panic(err)
+
 		}
-		clientStore := memory.New()
-		serverStore := memory.New()
-		session := state.New(clientStore, serverStore)
-		if cfg.Logger != nil {
-			session.SetDebugLogger(cfg.Logger)
-			session.SetErrorLogger(cfg.Logger)
+		if cfg.Store != nil {
+			switch cfg.Store.Type {
+			case "memory":
+				clientStore := memory.New()
+				serverStore := memory.New()
+				session = state.New(clientStore, serverStore)
+			case "file":
+				// check path exists
+				if _, err := os.Stat(cfg.Store.Path); os.IsNotExist(err) {
+					err = os.MkdirAll(cfg.Store.Path, os.ModePerm)
+					if err != nil {
+						panic(err)
+					}
+				}
+				clientStore, err := storefile.New(cfg.Store.Path, "client", ".session")
+				if err != nil {
+					panic(err)
+				}
+				serverStore, err := storefile.New(cfg.Store.Path, "server", ".session")
+				if err != nil {
+					panic(err)
+				}
+				session = state.New(clientStore, serverStore)
+			default:
+				panic("unknown store type")
+			}
+			if cfg.Logger != nil {
+				session.SetDebugLogger(cfg.Logger)
+				session.SetErrorLogger(cfg.Logger)
+			}
 		}
 	}
 
 	cliCfg := autopaho.ClientConfig{
-		BrokerUrls:                    []*url.URL{cfg.ServerURL},
+		ServerUrls:                    []*url.URL{cfg.ServerURL},
 		CleanStartOnInitialConnection: false,
-		KeepAlive:                     cfg.KeepAlive,
-		ConnectRetryDelay:             cfg.ConnectRetryDelay,
+		KeepAlive:                     20,
 		// SessionExpiryInterval - Seconds that a session will survive after disconnection.
 		// It is important to set this because otherwise, any queued messages will be lost if the connection drops and
 		// the server will not queue messages while it is down. The specific setting will depend upon your needs
 		// (60 = 1 minute, 3600 = 1 hour, 86400 = one day, 0xFFFFFFFE = 136 years, 0xFFFFFFFF = don't expire)
-		SessionExpiryInterval: 86400,
+		SessionExpiryInterval: 60,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 			serv.println("mqtt connection up")
 			serv.isConnected = true
@@ -140,7 +165,7 @@ func (serv *mqttServ) Run(ctx context.Context) {
 			for i, t := range cfg.Topics {
 				subOpts[i] = paho.SubscribeOptions{Topic: t, QoS: cfg.Qos}
 			}
-			if _, err := cm.Subscribe(context.Background(), &paho.Subscribe{
+			if _, err := cm.Subscribe(ctx, &paho.Subscribe{
 				Subscriptions: subOpts,
 			}); err != nil {
 				serv.printf("failed to subscribe (%s). This is likely to mean no messages will be received.", err)
@@ -156,7 +181,7 @@ func (serv *mqttServ) Run(ctx context.Context) {
 			// You can write the function(s) yourself or use the supplied Router
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
 				func(pr paho.PublishReceived) (bool, error) {
-					serv.printf("received message on topic %s; body: %s (retain: %t)\n", pr.Packet.Topic, pr.Packet.Payload, pr.Packet.Retain)
+					serv.printf("received message on topic %s; retain: %t\n", pr.Packet.Topic, pr.Packet.Retain)
 					if serv.h == nil {
 						return true, nil
 					}
@@ -188,7 +213,7 @@ func (serv *mqttServ) Run(ctx context.Context) {
 		cliCfg.ConnectUsername = cfg.Auth.UserName
 	}
 
-	if cfg.ServerURL.Scheme == "ssl" {
+	if cfg.ServerURL.Scheme == "mqtts" {
 		cliCfg.TlsCfg = &tls.Config{
 			ClientAuth:         tls.NoClientCert,
 			ClientCAs:          nil,
@@ -214,15 +239,10 @@ func (serv *mqttServ) Run(ctx context.Context) {
 	// is requested
 	<-ctx.Done()
 	serv.println("signal caught - exiting subscribe")
-
-	// We could cancel the context at this point but will call Disconnect instead (this waits for autopaho to shutdown)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_ = serv.cm.Disconnect(ctx)
 	serv.println("shutdown subscribe complete")
 }
 
-func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
+func (serv *mqttServ) Publish(ctx context.Context, topic string, qos byte, payload []byte) error {
 	// Publish will block so we run it in a goRoutine
 	var err error
 	if serv.config.EnableGzip {
@@ -231,8 +251,7 @@ func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+
 	pr, err := serv.cm.Publish(ctx, &paho.Publish{
 		QoS:     qos,
 		Topic:   topic,
@@ -250,7 +269,7 @@ func (serv *mqttServ) Publish(topic string, qos byte, payload []byte) error {
 	return nil
 }
 
-func (serv *mqttServ) PublishViaQueue(topic string, qos byte, payload []byte) error {
+func (serv *mqttServ) PublishViaQueue(ctx context.Context, topic string, qos byte, payload []byte) error {
 	if serv.config.QueuePath == "" {
 		return errors.New("no queue path set")
 	}
@@ -261,8 +280,7 @@ func (serv *mqttServ) PublishViaQueue(topic string, qos byte, payload []byte) er
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+
 	err = serv.cm.PublishViaQueue(ctx, &autopaho.QueuePublish{
 		Publish: &paho.Publish{
 			QoS:     qos,
